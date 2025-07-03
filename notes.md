@@ -171,3 +171,323 @@ An Elastic IP ensures your server has a fixed public IP address that doesn't cha
         *   `@...`: The public DNS address of your server.
 
 You are now connected to your lab server and ready to begin learning NGINX.
+
+---
+
+# 1. Install and Configure NGINX
+
+## Your NGINX learning environment
+
+*   This chapter focuses on setting up a sandbox environment.
+*   **Goals for this chapter:**
+    1.  Install NGINX.
+    2.  Become familiar with the NGINX command-line interface (CLI).
+    3.  Deploy a professionally designed website.
+
+## Install NGINX on Ubuntu
+
+*   **Prerequisites:** A server running the **Ubuntu** operating system. The course uses a cloud-based server on AWS.
+*   **Installation Steps:**
+    1.  Connect to the server and gain administrative privileges. This command makes you the `root` user for the session.
+        ```bash
+        sudo su -
+        ```
+    2.  Update the package list to ensure you get the latest version information.
+        ```bash
+        apt update
+        ```
+    3.  Install the NGINX package.
+        ```bash
+        apt install nginx
+        ```
+        *   Press `Enter` to confirm the installation when prompted.
+
+*   **Verifying the Installation:**
+    1.  **Check the version:** The `-V` (uppercase) switch shows the version and configuration parameters it was compiled with.
+        ```bash
+        nginx -V
+        ```
+        *   Example output: `nginx version: nginx/1.18.0 (Ubuntu)`
+    2.  **Check the service status:** Use `systemctl` to see if the NGINX service is running.
+        ```bash
+        systemctl status nginx
+        ```
+        *   Look for the status "active (running)".
+        *   Press `q` to exit the status view.
+    3.  **Use a web browser:** This is the most important confirmation.
+        *   Open a browser and navigate to your server's public IP address or DNS name.
+        *   You should see the **"Welcome to nginx!"** default page. This confirms the installation was successful and the server is running correctly.
+
+## The NGINX command-line interface
+
+*   **Permissions:** Managing the NGINX service requires elevated permissions, using `sudo` before each command or by becoming the `root` user with `sudo su`.
+*   **Managing the Service with `systemctl`:**
+    *   **Check Status:**
+        ```bash
+        systemctl status nginx
+        ```
+        *   To display the status without entering the pager interface, use the `--no-pager` flag:
+          ```bash
+          systemctl status nginx --no-pager
+          ```
+    *   **Stop/Start Service:**
+        ```bash
+        systemctl stop nginx
+        systemctl start nginx
+        ```
+    *   **Reload Configuration:** This is the preferred way to apply configuration changes without causing downtime.
+        ```bash
+        systemctl reload nginx
+        ```
+        *   Reloading keeps the service running, whereas `stop` and `start` cause a brief service interruption.
+        *   **Note:** The `start`, `stop`, and `reload` commands do not produce any output. Use `systemctl status nginx` to confirm the action was successful.
+
+*   **Using the `nginx` Command Directly:**
+    *   **Help:** To see a list of available command switches.
+        ```bash
+        nginx -h
+        ```
+    *   **Test Configuration (Syntax Check):** The lowercase `-t` switch checks configuration files for syntax errors before you try to reload them.
+        ```bash
+        nginx -t
+        ```
+        *   A successful check will return an "ok" message.
+    *   **Test and Print Configuration:** The uppercase `-T` switch tests the configuration and then prints the entire, fully resolved configuration to the screen.
+        ```bash
+        nginx -T
+        ```
+        *   This is useful for seeing how all the included files are combined into a single configuration.
+        *   You can pipe the output to a pager like `less` or `more` to view it one page at a time: `nginx -T | less`.
+
+## NGINX files and directories
+
+*   **Main Configuration Directory: `/etc/nginx/`**
+    *   This directory holds all configuration for the NGINX installation.
+    *   `nginx.conf`: The main, top-level configuration file.
+    *   `conf.d/`, `sites-available/`, `sites-enabled/`: Directories that hold server configuration files (similar to Apache's virtual hosts).
+    *   **Example Server Config:** `/etc/nginx/sites-available/default`
+        *   This file contains the configuration for the "Welcome to nginx!" page.
+        *   It includes helpful comments for getting started.
+
+*   **Log Directory: `/var/log/nginx/`**
+    *   This is the default location for NGINX log files.
+    *   `access.log`: Records every request processed by the server, including the client's IP address, time, and the requested path.
+    *   `error.log`: Records any errors encountered by the web server, as well as operational messages like restarts and configuration reloads.
+
+*   **Web Content (Document Root) Directory: `/var/www/`**
+    *   This location is used to store the actual files (HTML, images, etc.) served to clients.
+    *   `/var/www/html/` is the default directory for the initial NGINX installation.
+    *   As you define new server configurations, you will typically create new subdirectories within `/var/www/`.
+
+## Inside nginx.conf
+
+*   **Location:** `/etc/nginx/nginx.conf`
+*   **Editing:** It is **rarely necessary** to edit this file directly. The instructor uses `view` (read-only vim) to inspect it safely.
+*   **File Structure:**
+    *   **Simple Directives:** A setting on a single line, ending with a semicolon (e.g., `user nginx;`).
+    *   **Block Directives:** A directive that contains other directives within an opening and closing curly bracket `{ }` (e.g., the `http` block).
+
+*   **Key Directives and Sections:**
+    *   `user`: Defines the system user account that NGINX worker processes will run as (e.g., `user www-data;`).
+    *   `http { ... }`: A block that contains global directives for how NGINX handles HTTP traffic.
+    *   `include`: A directive used to load configuration from other files, making the setup modular.
+
+*   **Configuration Loading Methods (`include` statements):**
+    1.  `include /etc/nginx/conf.d/*.conf;`
+    2.  `include /etc/nginx/sites-enabled/*;`
+*   **Schools of Thought on Custom Configurations:**
+    *   **`sites-enabled` Method (Ubuntu Default):**
+        1.  Create configuration files in `/etc/nginx/sites-available/`.
+        2.  Create a symbolic link (`ln -s`) to the file from within the `/etc/nginx/sites-enabled/` directory to activate it.
+    *   **`conf.d` Method (Course Standard):**
+        1.  Place configuration files directly into `/etc/nginx/conf.d/`, ensuring they end with a `.conf` extension.
+        2.  The instructor finds this method **more straightforward and easier to maintain**. This course will use the `conf.d` method.
+
+*   **Further Reading:** The official NGINX documentation at **nginx.org** contains a complete list of all available directives.
+
+## Configure a virtual host, part 1
+
+*   **Goal:** Create the first custom server configuration for a new website.
+
+*   **Step 1: Disable the Default Site**
+    *   The default NGINX configuration is enabled via a symbolic link in `/etc/nginx/sites-enabled/`.
+    *   Remove the link to disable the default welcome page.
+        ```bash
+        # Navigate to the directory (optional, but good practice)
+        cd /etc/nginx/sites-enabled/
+        
+        # Remove the symbolic link
+        unlink default
+        ```
+    *   The original configuration file remains untouched in `/etc/nginx/sites-available/` if you need to restore it later.
+
+*   **Step 2: Create a New Configuration File**
+    *   **Location:** `/etc/nginx/conf.d/` (This is the method used in the course).
+    *   **Naming Convention:**
+        *   Name the file after the site for easier management (e.g., `binaryville.conf`).
+        *   The file **must** end with the `.conf` extension to be loaded by NGINX.
+    *   To disable a site using this method, you can either delete its `.conf` file or rename it to not end in `.conf`.
+    *   Create the new file using an editor like `vim`:
+        ```bash
+        vim /etc/nginx/conf.d/binaryville.conf
+        ```
+
+*   **Step 3: Build the Basic Server Block**
+    *   A `server` block defines the configuration for a single website (virtual host).
+    *   **`listen` directive:** Tells NGINX which port to listen on for requests. Port `80` is the standard for HTTP.
+    *   **`root` directive:** Specifies the document root—the directory on the server where the website's files are stored.
+    *   Example initial configuration:
+        ```nginx
+        server {
+            listen 80;
+            root /var/www/binaryville;
+        }
+        ```
+
+*   **Step 4: Test and Apply the New Configuration**
+    1.  Save the configuration file.
+    2.  **Test for syntax errors:**
+        ```bash
+        nginx -t
+        ```
+        *   You should see a message like: `nginx: the configuration file /etc/nginx/nginx.conf syntax is ok` and `nginx: configuration file /etc/nginx/nginx.conf test is successful`.
+    3.  **Reload the NGINX service** to apply the changes without downtime:
+        ```bash
+        systemctl reload nginx
+        ```
+    4.  **Confirm the reload** was successful by checking the service status:
+        ```bash
+        systemctl status nginx
+        ```
+        *   Look for a line at the end confirming the service was reloaded.
+
+*   **Step 5: Set Up the Website Directory and a Test File**
+    1.  Create the document root directory specified in the config file. The `-p` flag creates parent directories if they don't exist.
+        ```bash
+        mkdir -p /var/www/binaryville
+        ```
+    2.  Place a simple `index.html` file in the new directory to confirm it's working.
+        ```bash
+        echo "site coming soon" > /var/www/binaryville/index.html
+        ```
+    3.  Refresh the browser page for your server's IP/DNS. You should now see the "site coming soon" message.
+
+## Configure a virtual host, part 2
+
+*   **Goal:** Add more essential directives to the `binaryville.conf` server block for a more robust configuration.
+
+*   **New Directives to Add:**
+    1.  **`default_server`:**
+        *   Added to the `listen` directive: `listen 80 default_server;`
+        *   **Purpose:** If a request comes in that does not match any other `server_name` configured on the server's IP, this server block will be used to handle it.
+    2.  **`server_name`:**
+        *   Example: `server_name binaryville.local www.binaryville.local;`
+        *   **Purpose:** Defines which domain names this server block is responsible for. This is crucial for hosting multiple websites on a single IP address (named-based virtual hosts).
+    3.  **`index`:**
+        *   Example: `index index.html index.php;`
+        *   **Purpose:** Tells NGINX which file to serve by default when a client requests a directory. NGINX will look for the files in the order they are listed. `index.html` is the default if the directive is not specified.
+
+*   **Updated `binaryville.conf`:**
+    ```nginx
+    server {
+        listen 80 default_server;
+        root /var/www/binaryville;
+
+        index index.html;
+
+        server_name binaryville.local www.binaryville.local;
+    }
+    ```
+
+*   **Testing the Updated Configuration:**
+    1.  Save the file.
+    2.  Test syntax: `nginx -t`
+    3.  Reload NGINX: `systemctl reload nginx`
+    4.  Test locally from the server using `curl`:
+        ```bash
+        curl localhost
+        ```
+        *   This should return the content of your `index.html` file ("site coming soon").
+
+## Add files to the root directory
+
+*   **Goal:** Deploy the actual website files to the document root directory.
+*   **Steps:**
+    1.  **Get the Exercise Files:** Clone the course's GitHub repository to your server.
+        ```bash
+        git clone <repository_url>
+        ```
+    2.  **Locate the Website Archive:** The repository contains the website files, often in an archive format like `.zip` or `.tar.gz`. The course uses the tar archive.
+    3.  **Extract the Files:** Use the `tar` command to extract the archive's contents directly into the website's root directory (`/var/www/binaryville`). The course provides the exact command.
+        *   Example command structure: `tar -xzvf [archive-name].tar.gz -C /var/www/binaryville --strip-components=1`
+    4.  **Verify Files:** List the contents of the root directory to ensure the files were extracted correctly.
+        ```bash
+        ls /var/www/binaryville
+        ```
+    5.  **View the Live Site:** Refresh the page in your browser. The full, styled Binaryville website should now be displayed.
+
+## Challenge: Set up an NGINX server on Ubuntu Linux
+
+*   **The Task:** A developer needs a server for a new website. Your job is to set up a basic, working NGINX server on Ubuntu.
+*   **Requirements:**
+    1.  Start with a server running the latest version of Ubuntu.
+    2.  Install NGINX.
+    3.  Use CLI commands to verify the service is running and the configuration is valid.
+    4.  Access the server's URL in a browser to confirm the default NGINX welcome page is being served.
+
+## Solution: Set up an NGINX server on Ubuntu Linux
+
+*   **Steps to Complete the Challenge:**
+    1.  Connect to your Ubuntu server.
+    2.  Gain root privileges:
+        ```bash
+        sudo su -
+        ```
+    3.  Update the system's package list:
+        ```bash
+        apt update
+        ```
+    4.  Install NGINX. The `-y` flag automatically answers "yes" to the confirmation prompt.
+        ```bash
+        apt install -y nginx
+        ```
+    5.  Check the status of the NGINX service:
+        ```bash
+        systemctl status nginx
+        ```
+        *   Look for "active (running)".
+    6.  Test the default NGINX configuration for syntax errors:
+        ```bash
+        nginx -t
+        ```
+        *   Look for the "syntax is ok" and "test is successful" messages.
+    7.  Open a web browser and navigate to the server's public IP address or DNS name. The "Welcome to nginx!" page should be displayed.
+
+## Chapter Quiz
+
+*   **Q1: What is the main configuration file for NGINX?**
+    *   **A:** `/etc/nginx/nginx.conf`. It contains the main server configuration and can include other configuration files.
+*   **Q2: Is opening a browser to the server's IP address a good way to confirm NGINX is installed correctly?**
+    *   **A:** TRUE. If the installation is correct, the default welcome page will be served.
+*   **Q3: What is the file extension for configuration files in `/etc/nginx/conf.d`?**
+    *   **A:** `.conf`. This extension is required for the `include` directive in `nginx.conf` to process them.
+*   **Q4: What is the best practice for naming configuration files for different websites?**
+    *   **A:** Name each configuration file after the site it defines (e.g., `mytotallyamazingwebsite.com.conf`).
+*   **Q5: Must all NGINX settings exist in the `/etc/nginx.conf` file?**
+    *   **A:** FALSE. The `include` directive is used to load configurations from other files and directories.
+*   **Q6: Are the settings used to configure NGINX called directives?**
+    *   **A:** TRUE. Settings are listed as simple directives (one line) or block directives (multiple lines in `{}`).
+*   **Q7: Which directory holds the configuration for an NGINX installation?**
+    *   **A:** `/etc/nginx`.
+*   **Q8: What might happen if a `server_name` directive is missing when serving multiple sites from one IP?**
+    *   **A:** NGINX might serve the wrong content, as it won't know which site the request is for.
+*   **Q9: What does the command `systemctl reload nginx` do?**
+    *   **A:** FALSE. It tells NGINX to reload all **configuration files** from disk, not the website's content (HTML, CSS, etc.).
+*   **Q10: How does NGINX use the `default_server` directive?**
+    *   **A:** It tells NGINX to use that server configuration if no other configuration's `server_name` matches the requested site.
+*   **Q11: What is the command `nginx -t` used for?**
+    *   **A:** To check the NGINX configuration for syntax errors without stopping or reloading the service.
+*   **Q12: What does the directive `listen 80;` do?**
+    *   **A:** It configures the server to listen for incoming web requests on port 80.
+
+---
