@@ -491,3 +491,446 @@ You are now connected to your lab server and ready to begin learning NGINX.
     *   **A:** It configures the server to listen for incoming web requests on port 80.
 
 ---
+
+# Additional NGINX Configurations
+
+## Additional configurations and troubleshooting
+
+- **Beyond Basic Setup**: After installing and running NGINX, additional configurations enhance functionality
+- **Key Areas Covered**:
+  - **Locations**: Powerful feature to define how NGINX responds to different requests
+  - **Custom Logging**: Write logs to specific files for better debugging
+  - **Troubleshooting**: Tools and techniques when things don't work as expected
+- **Purpose**: Get a custom installation that meets specific requirements
+
+## Configure locations, part 1
+
+### What are Location Directives?
+- **Definition**: Directives that extend configuration based on the URI of incoming requests
+- **Structure**: Formatted as blocks, defined inside server blocks
+- **Nesting**: Can be nested inside other location blocks
+- **Flexibility**: Include most directives that work in server blocks
+
+### Location Directive Format
+```nginx
+location [modifier] [location_definition] {
+    # Configuration directives
+}
+```
+
+### Components Breakdown
+- **location keyword**: Required starter
+- **modifier**: Optional (controls how definition is interpreted)
+- **location definition**: Required (URI pattern to match)
+- **directives**: Configuration inside the block
+
+### Location Modifiers
+
+| Modifier | Name | Description | Behavior |
+|----------|------|-------------|----------|
+| `=` | Exact match | Matches definition exactly | No other locations checked |
+| `~` | Case-sensitive regex | Regular expression matching | Case matters |
+| `~*` | Case-insensitive regex | Regular expression matching | Case ignored |
+| `^~` | Prefix (no regex) | Stops regex processing | Optimization modifier |
+| (none) | Prefix | Treats as URI prefix | Default behavior |
+
+### Processing Rules
+- **Prefix strings**: Checked first
+- **Regular expressions**: Checked second, in order of appearance
+- **Best match**: NGINX uses series of matches to determine best location
+
+### Match Priority Order
+1. **Exact matches** (`=`)
+2. **Prefix matches** (longest wins)
+3. **Regular expressions** (first match wins)
+
+## Configure locations, part 2
+
+### Practical Configuration Example
+
+#### Root Location Setup
+```nginx
+location / {
+    try_files $uri $uri/ =404;
+}
+```
+
+#### try_files Directive Breakdown
+- **Purpose**: Gives NGINX list of files/directories to look for
+- **Processing**: First match gets processed
+- **Fallback**: Last item used if no matches (URI or error code)
+- **Variables**:
+  - `$uri`: Look for file matching the URI
+  - `$uri/`: Test for directories matching URI
+  - `=404`: Serve 404 error if nothing matches
+
+#### Images Location with Auto-indexing
+```nginx
+location /images/ {
+    autoindex on;
+}
+```
+- **autoindex**: Lets browsers list files in directory
+- **Default**: Turned off by default
+- **Use case**: File browsing functionality
+
+### Custom Error Pages Configuration
+
+#### Error Page Directives
+```nginx
+error_page 404 /404.html;
+error_page 500 502 503 504 /50x.html;
+```
+
+#### Error Page Locations
+```nginx
+location = /404.html {
+    internal;
+}
+
+location = /50x.html {
+    internal;
+}
+```
+
+#### Key Features
+- **Exact match modifier** (`=`): Ensures precise matching
+- **internal directive**: Processes redirects as internal redirects
+- **Performance**: Helps NGINX serve error pages more quickly
+
+### Testing Location (500 Error Demo)
+```nginx
+location = /500 {
+    fastcgi_pass unix:/nonexistent/socket;
+}
+```
+- **Purpose**: Demonstrates 500 error handling
+- **Misconfiguration**: Uses undefined Unix socket
+- **Result**: Triggers 500 error for testing
+
+### Testing Process
+1. **Configuration test**: `nginx -t`
+2. **Reload service**: `systemctl reload nginx`
+3. **Browser testing**:
+   - `/images` - Shows auto-indexed directory
+   - `/missing` - Shows custom 404 page
+   - `/500` - Shows custom 500 page
+
+## Configure logs
+
+### NGINX Logging Types
+- **Access Logs**: Record request details
+  - Time of request
+  - Success/failure status
+  - Client IP address
+  - Browser type
+- **Error Logs**: Record operational issues
+  - Configuration errors
+  - Service start/stop events
+  - Runtime errors
+
+### Default Logging Configuration
+- **Location**: `nginx.conf` inside HTTP block
+- **Directives**: `access_log` and `error_log`
+- **Limitation**: All sites write to same logs
+- **Problem**: Difficult to isolate site-specific issues
+
+### Custom Logging Levels
+
+#### Server-Level Logging
+```nginx
+server {
+    access_log /var/log/nginx/mysite.access.log;
+    error_log /var/log/nginx/mysite.error.log;
+}
+```
+
+#### Location-Level Logging
+```nginx
+location /images/ {
+    access_log /var/log/nginx/images.access.log;
+    error_log /var/log/nginx/images.error.log;
+}
+```
+
+### Best Practices
+- **Descriptive naming**: Match log files to configuration names
+- **Separate logs**: One per site for easier debugging
+- **Granular logging**: Location-specific logs for detailed tracking
+
+### Testing Custom Logs
+
+#### Generate Test Requests
+```bash
+# Send 10 requests to test logging
+for i in {1..10}; do curl localhost > /dev/null; done
+
+# Test specific location
+for i in {1..10}; do curl localhost/images/ > /dev/null; done
+```
+
+#### View Log Contents
+```bash
+# Check access logs
+cat /var/log/nginx/mysite.access.log
+
+# Check images location logs
+cat /var/log/nginx/images.access.log
+```
+
+## Troubleshoot NGINX
+
+### Configuration Testing
+- **Primary Tool**: `nginx -t`
+- **Benefits**:
+  - Catches syntax errors
+  - Identifies problem files
+  - Shows line numbers
+  - Validates directive usage
+
+### Common Configuration Errors
+
+#### Syntax Errors
+- **Typos**: `servr` instead of `server`
+- **File paths**: `HTM1` instead of `HTML`
+- **Domain names**: `www.examples.com` vs `www.example.com`
+- **Missing semicolons**: Most directives require them
+
+#### Error Example
+```nginx
+# Wrong
+servr {
+    listen 80;
+}
+
+# Correct
+server {
+    listen 80;
+}
+```
+
+### Service Status Troubleshooting
+
+#### Check Service Status
+```bash
+systemctl status nginx
+```
+- **Output**: Confirms if NGINX is running
+- **Follow-up**: Reload configuration if needed
+```bash
+systemctl reload nginx
+```
+
+#### Port Verification
+```bash
+# Using lsof (List Open Files)
+lsof -i | grep nginx
+
+# Using netstat (requires net-tools package)
+netstat -plan | grep nginx
+```
+
+#### Standard Web Ports
+- **Port 80**: HTTP traffic
+- **Port 443**: HTTPS traffic
+
+### Log-Based Troubleshooting
+
+#### Real-time Log Monitoring
+```bash
+# Follow logs as they're written
+tail -f /var/log/nginx/access.log
+tail -f /var/log/nginx/error.log
+```
+
+#### Error Analysis
+- **4xx errors**: Client-side issues (files not found, permissions)
+- **5xx errors**: Server-side issues (configuration problems)
+- **Access patterns**: Check if requests are being recorded
+
+### Systematic Troubleshooting Steps
+1. **Test configuration**: `nginx -t`
+2. **Check service**: `systemctl status nginx`
+3. **Verify ports**: `lsof -i | grep nginx`
+4. **Review logs**: `tail -f /var/log/nginx/error.log`
+5. **Test endpoints**: Try accessing various parts of site
+6. **Seek help**: Search engines, Stack Overflow for specific errors
+
+## Challenge: Customize an NGINX Configuration
+
+### Requirements
+- **Remove**: Default NGINX configuration
+- **Add**: New configuration for status page
+- **Route**: `/complete` endpoint (exact match, lowercase only)
+- **Response**: "your request is complete" message
+- **Logging**: Separate log file for this route
+
+### Steps Overview
+1. Start with fresh NGINX installation
+2. Remove default configuration file
+3. Add provided configuration to correct location
+4. Restart NGINX
+5. Update configuration for exact match location
+6. Add custom logging to `complete.access.log`
+
+### Time Estimate
+- **Duration**: 15-20 minutes
+- **Difficulty**: Intermediate
+
+## Solution: Customize an NGINX Configuration
+
+### Step-by-Step Solution
+
+#### 1. Remove Default Configuration
+```bash
+# Navigate to sites-enabled directory
+cd /etc/nginx/sites-enabled
+
+# Remove default configuration link
+unlink default
+```
+
+#### 2. Create Custom Configuration
+```bash
+# Navigate to conf.d directory
+cd /etc/nginx/conf.d
+
+# Create new configuration file
+vim complete.conf
+```
+
+#### 3. Configuration Content
+```nginx
+server {
+    listen 80 default_server;
+    listen [::]:80;
+
+    location = /complete {
+        # Custom access log for this location
+        access_log /var/log/nginx/complete.access.log;
+        
+        # Return JSON response
+        return 200 '{"Message": "Your request is complete."}\n';
+        
+        # Set content type
+        default_type text/json;
+    }
+}
+```
+
+#### 4. Configuration Breakdown
+- **`location = /complete`**: Exact match for the endpoint
+- **`access_log`**: Custom log file path
+- **`return 200`**: HTTP 200 response with message
+- **`default_type text/json`**: Sets response content type
+
+#### 5. Test and Deploy
+```bash
+# Test configuration
+nginx -t
+
+# Reload NGINX
+systemctl reload nginx
+
+# Verify service status
+systemctl status nginx
+```
+
+#### 6. Validation Steps
+```bash
+# Test the endpoint
+curl localhost/complete
+
+# Check log file creation
+ls /var/log/nginx/complete.access.log
+
+# View log contents
+cat /var/log/nginx/complete.access.log
+```
+
+### Key Directives Used
+
+#### access_log Directive
+- **Purpose**: Tells NGINX where to write logs for the context
+- **Scope**: Can be used in http, server, or location contexts
+- **Documentation**: `http://nginx.org/en/docs/http/ngx_http_log_module.html#access_log`
+
+#### return Directive
+- **Purpose**: Stops processing and returns specified code with optional response
+- **Syntax**: `return code [text];`
+- **Documentation**: `http://nginx.org/en/docs/http/ngx_http_rewrite_module.html#return`
+
+#### default_type Directive
+- **Purpose**: Helps NGINX tell clients how to interpret response content
+- **Usage**: Sets MIME type for responses
+- **Documentation**: `http://nginx.org/en/docs/http/ngx_http_core_module.html#default_type`
+
+## Chapter Quiz
+
+### Question 1 of 7
+**Location directives can not be nested inside other location blocks.**
+
+- TRUE
+- **FALSE** ✓
+
+**Explanation**: Location directives are formatted as blocks and are defined inside server blocks. They can also be nested inside other location blocks.
+
+### Question 2 of 7
+**Where can logs be configured in NGINX configurations?**
+
+- in location contexts
+- **in the http, server, and location contexts** ✓
+- in server contexts
+- in server and location contexts
+
+**Explanation**: Default logging is configured in the http context and can be overridden in the server and location contexts.
+
+### Question 3 of 7
+**What is a log file?**
+
+- **a record of various operational details** ✓
+- a list of the sites being served
+- a record of the directives used to configure the server
+
+**Explanation**: NGINX uses log files to record various operational details like the date, time, and name of a file that was served. These logs are useful for monitoring normal operation and tracking down issues if a problem occurs.
+
+### Question 4 of 7
+**A developer on your team has given you a new website to serve using NGINX. After reviewing the code, you find that the main file for the site is named index.xml. What directive in the site's NGINX configuration needs to be updated to allow the site to be served?**
+
+- **try_files** ✓
+- try_xml
+- site_root
+- listen
+
+**Explanation**: The try_files directive gives NGINX a list of files or directories to look for, relative to the location. The first file or directory that matches gets processed. If no items in the list match, then the last item in the list is used as a URI or an error code.
+
+### Question 5 of 7
+**What error is displayed when NGINX can't find any content to respond to a request?**
+
+- 400 error
+- 403 error
+- **404 error** ✓
+- 200 error
+
+**Explanation**: When NGINX can't find any content to respond to a request, it displays a 404 error page.
+
+### Question 6 of 7
+**What are location directive useful for?**
+
+- configuring NGINX to process different requests in ways similar to server blocks without having to create additional servers
+- **all of these answers** ✓
+- extending an NGINX configuration based on the URI being processed by the server
+
+**Explanation**: Location directives serve multiple purposes including extending configuration based on URI and allowing different request processing without additional servers.
+
+### Question 7 of 7
+**What is a good first step in troubleshooting problems with an NGINX server?**
+
+- **Use the 'systemctl status nginx' command to make sure NGINX is running.** ✓
+- Use the 'systemctl portcheck nginx' command to make sure NGINX is listening on port 80.
+- Use the 'systemctl stop nginx' command to make sure NGINX is not running.
+
+**Explanation**: A good first step in troubleshooting is to make sure NGINX is running. The systemctl status NGINX command gives output that confirms whether NGINX is running or not.
+
+---
+
