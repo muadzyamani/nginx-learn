@@ -492,7 +492,7 @@ You are now connected to your lab server and ready to begin learning NGINX.
 
 ---
 
-# Additional NGINX Configurations
+# 2. Additional NGINX Configurations
 
 ## Additional configurations and troubleshooting
 
@@ -934,3 +934,347 @@ cat /var/log/nginx/complete.access.log
 
 ---
 
+# 3. Reverse Proxies and Load Balancers
+
+## Using NGINX as a proxy and load balancer
+
+### What NGINX Can Do Beyond Web Serving
+- **Primary purpose**: Serve websites efficiently and reliably
+- **Additional capabilities**:
+  - Reverse proxy
+  - Load balancer
+- **Key benefit**: Becomes crucial component for serving dynamic content from other applications
+
+### Core Concepts
+- **Reverse proxy**: Often just called "proxy"
+- **Similar functions**: Both proxies and load balancers sit between client and backend resources
+- **Flow**: Client → Proxy/Load Balancer → Backend Server → Response back to client
+
+## Reverse proxies and load balancing
+
+### Reverse Proxy (Single Backend Server)
+- **Definition**: One server on the backend
+- **Backend examples**:
+  - Python web applications
+  - Node.js applications
+  - Apache servers
+  - Tomcat servers
+- **NGINX advantages**:
+  - SSL termination (easier than implementing in other technologies)
+  - Logging capabilities
+  - Content caching for acceleration
+  - Data compression (reduces bandwidth)
+
+### Load Balancer (Multiple Backend Servers)
+- **Definition**: Connects to multiple backend servers
+- **Benefits**:
+  - **High availability**: Site stays up if one server fails
+  - **Maintenance flexibility**: Can take servers offline for updates
+  - **Traffic distribution**: Handles large volumes across multiple servers
+- **Session persistence**: Routes client to same server for entire session
+  - **Use case**: When user login info stored locally on server
+  - **Without persistence**: User would need to re-login on each request
+
+## Configure NGINX as a reverse proxy
+
+### The upstream Directive
+- **Purpose**: Groups servers together for proxy/load balancing
+- **Reference**: Single unit that other directives can reference
+- **Documentation**: Available at nginx.org
+
+### NGINX Configuration Contexts
+- **Global context**: Affects all of NGINX
+- **HTTP context**: Items working with HTTP protocol
+- **Server context**: Configures virtual hosts (within HTTP context)
+- **Location context**: Configures URIs (within server context)
+- **Upstream placement**: Defined in HTTP context
+  - **Benefit**: One upstream can be reused by multiple servers and locations
+
+### Basic Upstream Configuration
+```nginx
+upstream app_server_7001 {
+    server 127.0.0.1:7001;
+}
+```
+
+### Key Components
+- **Upstream name**: Can be anything (e.g., `app_server_7001`)
+  - Including port number is naming convention, not requirement
+- **Server statement**: Different from virtual host server statement
+  - Must include DNS name or IP address
+  - Can use Unix socket if backend listens on socket
+  - Format: `server IP:PORT` or `server hostname:PORT`
+
+### Connecting to Upstream
+```nginx
+location /proxy {
+    proxy_pass http://app_server_7001/;
+}
+```
+
+### Critical Configuration Detail
+- **Trailing slash**: Essential in `proxy_pass` directive
+- **With slash**: `proxy_pass http://upstream_name/;`
+  - Routes to root of backend server
+  - Lets application handle routing
+- **Without slash**: `proxy_pass http://upstream_name`
+  - NGINX tries to connect to `/proxy` location on backend
+  - Usually not desired behavior
+
+## Configure NGINX as a load balancer
+
+### Load Balancing vs Proxy
+- **Similarity**: Functions are nearly identical
+- **Key difference**: Number of servers in upstream
+- **Methods**: How NGINX connects to servers in rotation
+
+### Load Balancing Methods
+
+#### 1. Round-Robin (Default)
+- **No directive needed** (default behavior)
+- **Behavior**: Requests sent to each server one at a time
+- **Distribution**: Even distribution across all servers
+- **Use case**: Simple, reasonable method for most scenarios
+
+#### 2. Least Connections
+- **Directive**: `least_conn;`
+- **Behavior**: Routes to server with fewest active connections
+- **Use case**: When backend processing times vary significantly
+
+#### 3. IP Hash
+- **Directive**: `ip_hash;`
+- **Behavior**: Routes based on client IP address
+- **Consistency**: Same client IP always goes to same server
+- **Use case**: Session persistence requirements
+
+#### 4. Weight Directive
+- **Purpose**: Influences all other methods
+- **Usage**: Give preference to certain servers
+- **Example**: Server with 2x CPU/memory gets higher weight
+- **Syntax**: `server 127.0.0.1:7001 weight=2;`
+
+### Example Configurations
+
+#### Round-Robin (Default)
+```nginx
+upstream round_robin_servers {
+    server 127.0.0.1:7001;
+    server 127.0.0.1:7002;
+    server 127.0.0.1:7003;
+}
+```
+
+#### Least Connections
+```nginx
+upstream least_conn_servers {
+    least_conn;
+    server 127.0.0.1:7001;
+    server 127.0.0.1:7002;
+    server 127.0.0.1:7003;
+}
+```
+
+#### IP Hash
+```nginx
+upstream ip_hash_servers {
+    ip_hash;
+    server 127.0.0.1:7001;
+    server 127.0.0.1:7002;
+    server 127.0.0.1:7003;
+}
+```
+
+#### Weighted
+```nginx
+upstream weighted_servers {
+    server 127.0.0.1:7001 weight=2;
+    server 127.0.0.1:7002;
+    server 127.0.0.1:7003;
+}
+```
+
+### Server Reuse
+- **Flexibility**: Same servers can be used in multiple upstreams
+- **Benefit**: Avoid defining servers repeatedly across different virtual hosts
+- **Example**: Same backend servers with different load balancing methods
+
+## Challenge: Set up a load balancer using NGINX
+
+### Challenge Requirements
+- **Scenario**: UUID generator service needs load balancing
+- **Goal**: Enable updates without service disruption
+- **Task**: Set up load balancer for multiple UUID generators
+
+### Steps to Complete
+1. **Fresh NGINX installation** on VM
+2. **Remove default configuration**
+3. **Use provided configuration file**
+4. **Add upstream group** named "UUID"
+   - Serve traffic from ports: 9001, 9002, 9003
+5. **Add location** to proxy requests using path `/UUID`
+6. **Start Python script** (simulates UUID generator)
+7. **Test in browser** - should show all three ports with UUIDs
+
+### Expected Time
+- **Duration**: 10-15 minutes
+
+## Solution: Set up a load balancer using NGINX
+
+### Step-by-Step Solution
+
+#### 1. Remove Default Configuration
+```bash
+unlink /etc/nginx/sites-enabled/default
+```
+
+#### 2. Copy Configuration File
+```bash
+cp load_balancer.conf /etc/nginx/conf.d/
+```
+
+#### 3. Add Upstream Group
+```nginx
+upstream uuid {
+    server 127.0.0.1:9001;
+    server 127.0.0.1:9002;
+    server 127.0.0.1:9003;
+}
+```
+
+#### 4. Add Location Block
+```nginx
+location /uuid {
+    proxy_pass http://uuid/;
+}
+```
+
+#### 5. Test and Reload Configuration
+```bash
+nginx -t
+systemctl reload nginx
+```
+
+#### 6. Start UUID Generator
+```bash
+python3 uuid-generator.py
+```
+
+#### 7. Test in Browser
+- Navigate to: `http://your-server/uuid`
+- **Expected output rotation**:
+  - Generator #9001 UUID=c7d2b4b8-815b-4710-8e50-d864bd443651
+  - Generator #9002 UUID=f96c4706-fae7-4e8b-af36-8861f3b60641
+  - Generator #9003 UUID=8b5adf27-eac6-4d04-bd0c-afdb8e5bde2f
+
+### Final Complete Configuration
+```nginx
+upstream uuid {
+    server 127.0.0.1:9001;
+    server 127.0.0.1:9002;
+    server 127.0.0.1:9003;
+}
+
+server {
+    listen 80;
+    
+    location /uuid {
+        proxy_pass http://uuid/;
+    }
+}
+```
+
+### Key Concepts Reinforced
+- **Upstream definition**: Groups servers as single unit
+- **Proxy_pass**: Connects location to upstream
+- **Trailing slash**: Critical for proper path routing
+- **Round-robin**: Default load balancing method
+- **Testing**: Always test configuration before deployment
+
+## Chapter Quiz
+
+### Question 1 of 6
+**Upstreams must be defined in the _____ context.**
+
+- [ ] server
+- [ ] global  
+- [ ] location
+- [x] **http**
+
+**Explanation**: Upstreams are defined in the HTTP context. This is useful so that one upstream can be defined and then reused by multiple servers also defined in the HTTP context.
+
+---
+
+### Question 2 of 6
+**Which directive is used to influence load balancing methods?**
+
+- [ ] ip_hash
+- [ ] round_robin
+- [x] **weight**
+- [ ] least_conn
+
+**Explanation**: The weight directive is used to influence load balancing methods. Since each server is considered evenly in the round robin method and by connections in the least connections method, a weight can be applied to a server to give it a higher preference.
+
+---
+
+### Question 3 of 6
+**What is the main difference between configuring a reverse proxy and a load balancer in NGINX?**
+
+- [ ] the proxy_pass directive is used for proxies and the balance_pass directive is used for load balancers
+- [ ] the additional logging for load balancers
+- [x] **the number of servers in the upstream used by a proxy_pass directive**
+
+**Explanation**: If there is only one server in an upstream, NGINX will operate as a reverse proxy. If more than one server is in an upstream, NGINX will operate as a load balancer.
+
+---
+
+### Question 4 of 6
+**You are deploying two web app servers that will be used to host a popular social application. An NGINX server will be used as a load balancer to share traffic across the web app servers. Which of the following code blocks correctly configures the web app servers to be considered as a single source within NGINX?**
+
+- [x] **upstream web-app {**
+  **server web-app-server-1.example.com;**
+  **server web-app-server-2.example.com;**
+**}**
+
+- [ ] upside web-app {
+  server web-app-server-1.example.com;
+  server web-app-server-2.example.com;
+}
+
+- [ ] proxy_pass web-app {
+  server web-app-server-1.example.com;
+  server web-app-server-2.example.com;
+}
+
+- [ ] server_group web-app {
+  server web-app-server-1.example.com;
+  server web-app-server-2.example.com;
+}
+
+**Explanation**: The upstream directive is one of the key components used to configure NGINX for proxying and load balancing. The upstream directive groups servers together, allowing other directives to reference all of the servers as a single unit.
+
+---
+
+### Question 5 of 6
+**You are supporting a web application that requires frequent deployments. When the application is updated, customers see it as being "offline" for several minutes. As a result, the application is receiving poor reviews. How can you improve the reliability of the application and increase customer satisfaction, while maintaining the deployment frequency?**
+
+- [x] **Place the application on several servers running behind a load balancer. Deploy updates to the servers one at a time so the other servers can continue processing requests.**
+
+- [ ] Find the time when the site is not being used heavily and deploy during that time. Fewer customers will be upset this way and the site will not be offline during peak times, improving reliability.
+
+- [ ] Place the application on one server and use a proxy to cache requests to the server. The cache will prevent customers from seeing the site as being offline.
+
+**Explanation**: This is the best choice. With multiple servers behind a load balancer, a site or application can be more reliable by continuing to respond to requests if one server goes down. This also gives site administrators some flexibility for maintenance since they can take one server offline to update software, for example, without taking the entire site offline. Depending on the needs of the application, as long as one server is online, the site will still be up. This will keep customers happy.
+
+---
+
+### Question 6 of 6
+**What can an NGINX proxy be used for?**
+
+- [ ] SSL termination
+- [x] **all of these answers**
+- [ ] caching content  
+- [ ] logging
+
+**Explanation**: NGINX is great at simplifying things that might be harder to implement in other technologies like SSL termination and logging. NGINX proxies are also good for accelerating the response from backend servers by caching content.
+
+---
