@@ -1202,8 +1202,6 @@ server {
 
 **Explanation**: Upstreams are defined in the HTTP context. This is useful so that one upstream can be defined and then reused by multiple servers also defined in the HTTP context.
 
----
-
 ### Question 2 of 6
 **Which directive is used to influence load balancing methods?**
 
@@ -1214,8 +1212,6 @@ server {
 
 **Explanation**: The weight directive is used to influence load balancing methods. Since each server is considered evenly in the round robin method and by connections in the least connections method, a weight can be applied to a server to give it a higher preference.
 
----
-
 ### Question 3 of 6
 **What is the main difference between configuring a reverse proxy and a load balancer in NGINX?**
 
@@ -1224,8 +1220,6 @@ server {
 - [x] **the number of servers in the upstream used by a proxy_pass directive**
 
 **Explanation**: If there is only one server in an upstream, NGINX will operate as a reverse proxy. If more than one server is in an upstream, NGINX will operate as a load balancer.
-
----
 
 ### Question 4 of 6
 **You are deploying two web app servers that will be used to host a popular social application. An NGINX server will be used as a load balancer to share traffic across the web app servers. Which of the following code blocks correctly configures the web app servers to be considered as a single source within NGINX?**
@@ -1252,8 +1246,6 @@ server {
 
 **Explanation**: The upstream directive is one of the key components used to configure NGINX for proxying and load balancing. The upstream directive groups servers together, allowing other directives to reference all of the servers as a single unit.
 
----
-
 ### Question 5 of 6
 **You are supporting a web application that requires frequent deployments. When the application is updated, customers see it as being "offline" for several minutes. As a result, the application is receiving poor reviews. How can you improve the reliability of the application and increase customer satisfaction, while maintaining the deployment frequency?**
 
@@ -1264,8 +1256,6 @@ server {
 - [ ] Place the application on one server and use a proxy to cache requests to the server. The cache will prevent customers from seeing the site as being offline.
 
 **Explanation**: This is the best choice. With multiple servers behind a load balancer, a site or application can be more reliable by continuing to respond to requests if one server goes down. This also gives site administrators some flexibility for maintenance since they can take one server offline to update software, for example, without taking the entire site offline. Depending on the needs of the application, as long as one server is online, the site will still be up. This will keep customers happy.
-
----
 
 ### Question 6 of 6
 **What can an NGINX proxy be used for?**
@@ -1278,3 +1268,433 @@ server {
 **Explanation**: NGINX is great at simplifying things that might be harder to implement in other technologies like SSL termination and logging. NGINX proxies are also good for accelerating the response from backend servers by caching content.
 
 ---
+
+# 4. NGINX Security
+## Getting secure with NGINX
+
+### Why Security Matters
+- Web services on networks need security protection
+- NGINX has built-in security features
+- Common threats: website hacking, data breaches, compromised sites
+
+### Core Security Concepts Covered
+- **Access Control**: Limit access to specific website locations
+- **SSL/TLS Encryption**: Encrypt traffic between browser and server
+- **Authentication**: Password-based protection for sensitive areas
+
+## Secure sites with NGINX
+
+### Essential Security Practices
+
+#### 1. System Updates
+- Keep operating system updated with latest versions
+- Apply all security patches regularly
+- Protects against known vulnerabilities
+
+#### 2. Access Restriction
+- Control who can access certain parts of your site
+- Use IP address-based restrictions
+- Implement password protection for sensitive areas
+
+#### 3. Transport Layer Security (TLS/SSL)
+- **TLS**: Updated, more secure version of SSL
+- **SSL**: Older Secure Sockets Layer protocol
+- **Purpose**: Encrypt connections between web server and browser
+- **Benefits**: 
+  - Keeps communications private
+  - Helps identify websites and their owners
+  - Uses verified certificates for authentication
+
+### Security Implementation Order
+1. Update system and software
+2. Configure access restrictions
+3. Set up SSL/TLS encryption
+4. Implement authentication mechanisms
+
+
+## Configure allow and deny directives
+
+### HTTP Access Module
+- **Purpose**: Control who can access specific content
+- **Directives**: `allow` and `deny`
+- **Context**: Can be used in HTTP, server, and location blocks
+
+### Pattern Matching Options
+| Pattern Type | Example | Description |
+|--------------|---------|-------------|
+| Keyword | `all` | Matches all addresses |
+| Single IP | `192.168.1.1` | Matches one specific client |
+| CIDR Block | `192.168.1.0/24` | Matches range of IP addresses |
+
+### CIDR Notation
+- **Full Name**: Classless Inter-Domain Routing
+- **Purpose**: Represent range of IP addresses with single rule
+- **Example**: `192.168.1.0/24` covers 192.168.1.1 to 192.168.1.254
+
+### Configuration Example
+```nginx
+location /admin {
+    allow 192.168.1.1;          # Allow single IP
+    allow 192.168.0.0/16;       # Allow private network
+    allow 10.0.0.0/8;           # Allow private network
+    allow 172.16.0.0/12;        # Allow private network
+    deny all;                   # Deny everything else
+}
+```
+
+### Important Rules
+- **Order Matters**: Rules applied in sequence they're defined
+- **Best Practice**: Place `deny all` after all allow rules
+- **Use Case**: Protect admin areas from public access
+
+### Implementation Steps
+1. Get your IP address: `curl https://api.ipify.org`
+2. Edit NGINX configuration file
+3. Add allow rule for your IP
+4. Copy config to `/etc/nginx/conf.d/`
+5. Test with `nginx -t`
+6. Reload with `systemctl reload nginx`
+
+## Configure password authentication
+
+### HTTP Auth Basic Module
+- **Purpose**: Simple username/password checking
+- **Directives**: `auth_basic` and `auth_basic_user_file`
+- **Context**: HTTP, server, and location blocks
+- **Flexibility**: Can protect entire sites or specific locations
+
+### Configuration Directives
+
+#### auth_basic
+- **Purpose**: Enable/configure basic authentication
+- **Syntax**: `auth_basic "prompt message";`
+- **Special Value**: `auth_basic off;` (disables authentication)
+- **Note**: Not all browsers display the prompt message
+
+#### auth_basic_user_file
+- **Purpose**: Specify password file location
+- **Syntax**: `auth_basic_user_file /path/to/passwords;`
+- **Example**: `auth_basic_user_file /etc/nginx/passwords;`
+
+### Password File Format
+```
+username1:encrypted_password1
+username2:encrypted_password2
+```
+
+### htpasswd Utility
+- **Source**: Apache2 utils package
+- **Installation**: `apt install -y apache2-utils`
+- **Purpose**: Create and manage password files
+- **Documentation**: Available on apache.org
+
+### Creating Password File
+```bash
+# Create new file with user
+htpasswd -c /etc/nginx/passwords username
+
+# Add user to existing file
+htpasswd /etc/nginx/passwords username
+```
+
+### Configuration Example
+```nginx
+location /private {
+    auth_basic "Restricted Area";
+    auth_basic_user_file /etc/nginx/passwords;
+}
+```
+
+### Security Considerations
+- **Limitation**: Basic auth is basic - not complete security solution
+- **Recommendation**: Use with other NGINX security methods
+- **Best Practice**: Combine with IP restrictions and SSL/TLS
+
+### Implementation Process
+1. Install apache2-utils package
+2. Create password file with htpasswd
+3. Configure auth_basic directives
+4. Test and reload NGINX configuration
+5. Verify with browser authentication prompt
+
+## Configure HTTPS
+
+### HTTP vs HTTPS
+- **HTTP**: Basic web protocol (unencrypted)
+- **HTTPS**: Secure version of HTTP (encrypted)
+- **Purpose**: Protect sensitive data transmission
+
+### Why HTTPS Matters
+- **Data Protection**: Encrypts credit card info, personal identifiers
+- **Trust**: Browsers mark HTTP sites as "not secure"
+- **SEO**: Search engines favor HTTPS sites
+
+### SSL vs TLS Evolution
+- **SSL**: Secure Sockets Layer (deprecated, reversed/vulnerable)
+- **TLS**: Transport Layer Security (current standard)
+- **Common Usage**: People still say "SSL" when referring to certificates
+- **NGINX Module**: HTTP SSL module (maintains SSL naming)
+
+### Browser Security Indicators
+- **HTTP Sites**: Marked as "not secure"
+- **HTTPS Sites**: Show padlock icon, considered secure
+- **Goal**: Convert HTTP to HTTPS for better security
+
+## Create an SSL certificate
+
+### Certificate Types
+
+#### Production Certificates
+- **Certificate Authorities**: Let's Encrypt, Entrust, DigiCert
+- **Cloud Providers**: AWS, Azure, Google Cloud
+- **Benefits**: 
+  - Trusted by browsers
+  - Professional identity verification
+  - No security warnings
+
+#### Self-Signed Certificates
+- **Purpose**: Development and testing
+- **Limitations**: 
+  - Browsers don't trust them
+  - Security warnings displayed
+  - Not suitable for production
+- **Benefits**: 
+  - Free to create
+  - Still encrypts traffic
+  - Good for internal testing
+
+### Certificate Components
+- **SSL Certificate**: Digital credential authenticating website identity
+- **Private Key**: Used for encryption/decryption
+- **Location**: 
+  - Certificate: `/etc/ssl/certs/nginx.crt`
+  - Key: `/etc/ssl/private/nginx.key`
+
+### Creating Self-Signed Certificate
+```bash
+# Using OpenSSL command
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    -keyout /etc/ssl/private/nginx.key \
+    -out /etc/ssl/certs/nginx.crt
+```
+
+### Script Example
+```bash
+#!/bin/bash
+# create_certificate_and_key.sh
+# Creates private key and self-signed certificate using OpenSSL
+```
+
+## Configure NGINX to use an SSL certificate
+
+### SSL Configuration Requirements
+- **Port**: 443 (standard HTTPS port)
+- **SSL Parameter**: Enable SSL processing
+- **Certificate Files**: Specify certificate and key locations
+
+### Key Configuration Directives
+```nginx
+server {
+    listen 443 ssl;                           # Enable SSL on port 443
+    ssl_certificate /etc/ssl/certs/nginx.crt;     # Certificate location
+    ssl_certificate_key /etc/ssl/private/nginx.key;  # Private key location
+}
+```
+
+### Browser Behavior with Self-Signed Certificates
+
+#### Chrome
+- **Behavior**: Blocks access with "Connection is not private"
+- **Warning**: Certificate not valid
+- **Workaround**: Not intuitive to bypass
+
+#### Firefox
+- **Behavior**: Shows warning but allows override
+- **Process**: 
+  1. Click "Advanced" button
+  2. Select "Accept the Risk and Continue"
+  3. Access site successfully
+
+### Configuration Steps
+1. Update NGINX config with SSL directives
+2. Copy config to `/etc/nginx/conf.d/`
+3. Test configuration: `nginx -t`
+4. Reload NGINX: `systemctl reload nginx`
+5. Access via `https://` (port 443)
+
+### URL Format
+- **HTTP**: `http://domain.com` (port 80)
+- **HTTPS**: `https://domain.com` (port 443)
+
+## Challenge: Secure a website with NGINX
+
+### Challenge Requirements
+1. **Fresh Installation**: New NGINX installation
+2. **Clean Config**: Remove default configuration
+3. **New Site**: Create configuration for preview site
+4. **Protection**: Secure entire site with basic authentication
+5. **Credentials**: Create user "CEO" with password "qwerty"
+6. **Validation**: Test with web browser
+
+### Time Estimate
+- **Duration**: 10-15 minutes
+- **Difficulty**: Intermediate
+- **Skills**: Configuration, authentication, testing
+
+### Success Criteria
+- NGINX installed and default config removed
+- Preview site configuration created
+- Basic authentication protecting entire site
+- CEO user with qwerty password created
+- Browser successfully prompts for and accepts credentials
+
+## Solution: Secure a website with NGINX
+
+### Step 1: Fresh NGINX Installation
+```bash
+# Become root user
+sudo su -
+
+# Install NGINX
+apt update
+apt install -y nginx
+
+# Remove default configuration
+unlink /etc/nginx/sites-enabled/default
+```
+
+### Step 2: Create Preview Site Configuration
+```bash
+# Create new configuration file
+vim /etc/nginx/conf.d/preview.conf
+```
+
+### Step 3: Basic Authentication Configuration
+```nginx
+server {
+    listen 80 default_server;
+    
+    # Basic authentication for entire site
+    auth_basic "Please authenticate";
+    auth_basic_user_file /etc/nginx/passwords;
+}
+```
+
+### Step 4: Install htpasswd Utility
+```bash
+# Install Apache2 utilities package
+apt install -y apache2-utils
+
+# Verify installation
+which htpasswd
+```
+
+### Step 5: Create Password File
+```bash
+# Create password file with CEO user
+htpasswd -c /etc/nginx/passwords CEO
+# Enter password: qwerty
+# Confirm password: qwerty
+
+# Verify password file
+cat /etc/nginx/passwords
+```
+
+### Step 6: Apply Configuration
+```bash
+# Test configuration
+nginx -t
+
+# Reload NGINX
+systemctl reload nginx
+```
+
+### Step 7: Browser Validation
+1. Navigate to server IP address
+2. Browser prompts for authentication
+3. Enter credentials:
+   - Username: CEO
+   - Password: qwerty
+4. Successfully access the site
+
+### Configuration Analysis
+- **Server Block**: Listens on port 80 as default server
+- **Protection Level**: Entire site protected (auth_basic in server block)
+- **Alternative**: Could use location block for specific paths
+- **Security**: Username in plain text, password encrypted in file
+
+### Key Learning Points
+- Auth directives can be applied at server or location level
+- htpasswd creates encrypted password files
+- Browser testing confirms authentication works
+- Configuration order matters for security rules
+
+## Chapter Quiz
+
+### Question 1 of 8
+**Which module contains directives used to control who can view certain parts of a website?**
+- ❌ the HTTP defense module
+- ❌ the HTTP control module
+- ❌ the HTTP limit request module
+- ✅ **the HTTP Access module**
+
+**Explanation**: NGINX provides the HTTP Access module that includes allow and deny directives. These are used to limit who is allowed to see certain content and who gets denied.
+
+### Question 2 of 8
+**allow and deny directives can be listed in any order.**
+- ✅ **FALSE**
+- ❌ TRUE
+
+**Explanation**: Allow and deny directives will be applied in the order they are defined. So it is important to have the deny all come after all of the addresses that are allowed.
+
+### Question 3 of 8
+**What program is used to create SSL keys and certificates?**
+- ❌ certgen
+- ❌ nginx.crt
+- ❌ publicssl
+- ✅ **openssl**
+
+**Explanation**: The openSSL command line tool can be used to create self signed SSL keys and certificates.
+
+### Question 4 of 8
+**NGINX uses the _____ module to configure sites for HTTPS.**
+- ❌ HTTP Encryption
+- ✅ **HTTP SSL**
+- ❌ HTTP TLS
+
+**Explanation**: NGINX provides the HTTP SSL Module for configuring sites for HTTPS. Even though HTTPS now uses TLS (Transport Layer Security) as the method for encrypting traffic, the module is named SSL for the original method of encryption.
+
+### Question 5 of 8
+**What is the best location for a password file?**
+- ❌ /var/www/html
+- ❌ /var/www
+- ✅ **/etc/nginx**
+
+**Explanation**: It's important to not store the password file in a location that can be accessed by anyone browsing a site. This might allow them to access the password file and discover account names and passwords. Since configuration directories are not browsable, /etc/nginx is the best choice.
+
+### Question 6 of 8
+**You need to create and manage a file that lists usernames and passwords that can be used as credentials to access a protected location in your website. Which of these tools is the best choice for creating and managing such a file?**
+- ❌ nginx
+- ✅ **htpasswd**
+- ❌ createpasswd
+- ❌ passwdmkr
+
+**Explanation**: One of the best ways to create and manage password files is with the "htpasswd" program which is included in the Apache2 Utils package.
+
+### Question 7 of 8
+**What is the best way to start securing NGINX?**
+- ✅ **Keep the operating system and software patched and up to date.**
+- ❌ Run the nginx -t command to check the configuration.
+- ❌ Allow all parts of the site to be accessed by anyone.
+
+**Explanation**: The step for securing NGINX is to make sure the operating systems and software are using the latest versions possible and have all security updates applied. This will help make sure NGINX is protected against known vulnerabilities.
+
+### Question 8 of 8
+**An SSL certificate is a digital credential that authenticates a website's identity and helps encrypt the connection between a browser and a web server.**
+- ❌ FALSE
+- ✅ **TRUE**
+
+**Explanation**: SSL Certificates help identify websites and help keep the sensitive content secure by encrypting transmissions.
+
+---
+
