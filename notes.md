@@ -1698,3 +1698,209 @@ systemctl reload nginx
 
 ---
 
+# 5. Using NGINX with Docker
+
+## Using NGINX with Docker
+
+Transitioning from a traditional Linux server setup, NGINX can be packaged into a container image. This approach bundles NGINX, static content, and all necessary configurations into a single, self-contained, portable artifact. Using the Docker framework and a `Dockerfile`, we can define the entire build process, creating an image that can be deployed wherever a container runtime is available.
+
+## Run an NGINX container
+
+### Core Concepts
+
+-   **Container Image**: A self-contained digital artifact that includes everything needed to run an application: an operating system, software, libraries, configuration, and content.
+-   **Docker**: A popular framework for building, running, and managing container images. The terms "container" and "Docker" are often used interchangeably.
+-   **Docker CLI**: The command-line interface for interacting with Docker. The primary commands we will use are `docker run` and `docker build`.
+
+### The `docker run` Command
+
+The `docker run` command starts a new container from a specified image.
+
+**Command Structure:**
+
+```bash
+docker run [OPTIONS] IMAGE [COMMAND] [ARG...]
+```
+
+**Key Parameters:**
+
+-   **`--publish` (or `-p`)**: Maps a port on the host machine to a port inside the container. The format is `host_port:container_port`.
+-   **`IMAGE`**: The name of the container image to run (e.g., `nginx`).
+
+If the specified image is not found on the local system, Docker will automatically download it from a container registry (like Docker Hub).
+
+**Example:**
+
+To run the official NGINX image and map your local system's port 80 to the container's port 80:
+
+```bash
+docker run --publish 80:80 nginx
+```
+
+After running this command, the NGINX container will start, and you can access the default NGINX welcome page by navigating to `http://localhost` in a web browser.
+
+## Build an NGINX container image
+
+To create a custom container image, we use a `Dockerfile`.
+
+### The Dockerfile
+
+A `Dockerfile` is a text file containing a set of instructions that Docker uses to build an image.
+
+-   **Format**: Instructions are single-word commands (conventionally in uppercase) followed by arguments. Comments are prefixed with `#`.
+-   **Processing**: Instructions are executed sequentially from top to bottom.
+
+**Common Instructions:**
+
+| Instruction | Description |
+| :--- | :--- |
+| **`FROM`** | Specifies the base image to build upon (e.g., `FROM nginx:latest`). |
+| **`RUN`** | Executes a command inside the container during the build process (e.g., `RUN apt-get update`). |
+| **`COPY`** | Copies files or directories from the host system into the container image (e.g., `COPY index.html /usr/share/nginx/html/`). |
+
+### The `docker build` Command
+
+This command builds a new image from a `Dockerfile`.
+
+**Command Structure:**
+
+```bash
+docker build [OPTIONS] PATH
+```
+
+**Key Parameters:**
+
+-   **`--tag` (or `-t`)**: Assigns a name and optional tag to the image (e.g., `myimage:v1`). This makes it easier to reference later.
+-   **`PATH`**: The build context, which is the path to the directory containing the `Dockerfile` and any files needed for the build. Using a single dot (`.`) denotes the current directory.
+
+**Example Build and Run Process:**
+
+1.  **Create `index.html`** with custom content.
+2.  **Create `Dockerfile`**:
+    ```dockerfile
+    # Use the official NGINX image as the base
+    FROM nginx:latest
+
+    # Copy the custom index.html into the NGINX web root
+    COPY index.html /usr/share/nginx/html/index.html
+    ```
+3.  **Build the image**:
+    ```bash
+    docker build --tag myimage .
+    ```
+4.  **Run the new image**:
+    ```bash
+    docker run --publish 80:80 myimage
+    ```
+    Now, accessing `http://localhost` will display your custom `index.html` page.
+
+
+## Challenge: Build an NGINX container image
+
+**Objective**: Build a container image for the "Binaryville" website. All necessary files are provided in the exercise materials.
+
+**Requirements**:
+
+1.  Clone the exercise files to your local system.
+2.  Examine the provided `Dockerfile` to understand the `FROM`, `RUN`, and `COPY` commands.
+3.  Use the `docker build` command to create an image named **`binaryville`**.
+4.  Use the `docker run` command to start a container from the built image.
+5.  The container uses a self-signed certificate, so publish the HTTPS port (**443**).
+6.  Use a browser that allows exceptions for self-signed certificates (like Firefox) to explore the running site.
+7.  Verify that all locations, proxies, and load balancers from the course are working, including the `/private` location with its username and password.
+
+---
+
+## Solution: Build an NGINX container image
+
+### 1. Analyzing the `Dockerfile`
+
+The provided `Dockerfile` automates the complete setup of the Binaryville website environment.
+
+-   **`FROM nginx:latest`**: Starts with the official NGINX image.
+-   **`RUN apt-get update && apt-get install ...`**: Installs necessary dependencies:
+    -   `python3`: To run the backend application servers for proxying/load balancing.
+    -   `apache2-utils`: To use the `htpasswd` command.
+-   **`RUN htpasswd ...`**: Creates a password file for the user `robots` to secure the `/private` location with basic authentication.
+-   **`RUN openssl ...`**: Generates a self-signed SSL certificate and key to enable HTTPS on port 443.
+-   **`COPY` Commands**:
+    1.  Copies the application server scripts into the container.
+    2.  Copies a custom wrapper script. This script is essential to start the backend app servers in the background, allowing the main NGINX process to start correctly.
+    3.  Copies the custom `binaryville.conf` into NGINX's default configuration directory, replacing the default setup.
+    4.  Copies all website content (HTML, CSS, JS, images) into the NGINX web root.
+
+### 2. Building the Image
+
+Navigate to the directory containing the `Dockerfile` and other exercise files in your terminal.
+
+```bash
+docker build --tag binaryville .
+```
+
+Docker will execute each step in the `Dockerfile`, creating the `binaryville` image.
+
+### 3. Running the Container
+
+Once the build is complete, run the image and map the HTTPS port.
+
+```bash
+docker run --publish 443:443 binaryville
+```
+
+The container will start, and the NGINX server will be running with the custom configuration.
+
+### 4. Verifying the Site
+
+1.  **Access the Site**: Open a browser (e.g., Firefox) and navigate to `https://localhost`. You may need to accept a security warning for the self-signed certificate.
+2.  **Test Locations**:
+    -   **/images/**: Should show the auto-indexed directory of images.
+    -   **/missing**: Should display the custom 404 error page.
+    -   **/500**: Should display the custom 500 internal server error page.
+3.  **Test Proxy/Load Balancer**:
+    -   **/proxy**: Should show the response from the single backend server.
+    -   **/round-robin**: Refreshing the page should cycle through responses from servers on ports 7001, 7002, and 7003.
+4.  **Test Basic Authentication**:
+    -   **/private**: Should prompt for credentials.
+    -   **Username**: `robots`
+    -   **Password**: `123456`
+    -   Upon successful login, the private page should be displayed.
+
+Successfully completing these checks confirms the container image was built and is running correctly.
+
+## Chapter Quiz
+
+**Question 1 of 3**
+
+A developer on your team has just completed the design for a new application and wants to share the app with the rest of the team as a container image. What document can the developer use to define the steps needed to create a container image for the application?
+
+-   Buildappfile
+-   Imagefile
+-   **Dockerfile**
+    > **Correct**
+    >
+    > A Dockerfile is a set of instructions that the Docker runtime uses to build an image. It specifies the base image to start with, any commands needed to update or configure the base image, and any commands need to add content to the image.
+-   Containerfile
+
+**Question 2 of 3**
+
+Which statement best describes the content of a container image?
+
+-   Container images are physical artifacts that developers can use to store ideas for the next time they need to run an application.
+-   Container images are digital artifacts that allow code to be visualized using photo manipulation software.
+-   **Container images are digital artifacts that have everything needed to run an application.**
+    > **Correct**
+    >
+    > Container images are digital artifacts that have everything needed to run an application. This can include an operating system, software, and any configuration or content the application needs to run.
+-   Container images are digital artifacts that automatically keep code fresh and up to date.
+
+**Question 3 of 3**
+
+What is the importance of the `--publish` switch when using the `docker run` command?
+
+-   **The `--publish` switch defines the ports used to connect ports on the container to ports on the system where the container is running.**
+    > **Correct**
+    >
+    > The "--publish" switch is followed by two numbers separated by a colon. The first number is the port used to connect to the container from the system where the container is running and the second number is the port the container will use to listen for requests.
+-   The `--publish` switch checks the container image for any syntax or grammar errors before running the application defined by the image.
+-   The `--publish` switch is need to publish the image so that other developers can use it on their local systems.
+-   The `--publish` switch defines the ports where NGINX was originally developed before being packaged and shipped to countries around the world.
