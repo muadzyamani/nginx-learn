@@ -1809,8 +1809,6 @@ docker build [OPTIONS] PATH
 6.  Use a browser that allows exceptions for self-signed certificates (like Firefox) to explore the running site.
 7.  Verify that all locations, proxies, and load balancers from the course are working, including the `/private` location with its username and password.
 
----
-
 ## Solution: Build an NGINX container image
 
 ### 1. Analyzing the `Dockerfile`
